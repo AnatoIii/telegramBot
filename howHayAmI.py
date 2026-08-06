@@ -1,91 +1,103 @@
 """
-Simple Telegram bot with /test1, /test2, /test3 commands.
-Each command replies with "It is N%" where N is a random number (0-100).
- 
+Telegram bot with a single /howgayami command — built WITHOUT any
+Telegram-specific library. It talks to the Telegram Bot API directly over
+plain HTTP using `requests` and does its own long-polling loop.
+
+Note: Telegram only allows lowercase letters, digits, and underscores in
+command names, so the command is registered as /howgayami (not /HowGayAmI).
+It's matched case-insensitively below, so /HowGayAmI typed by a user still works.
+
 SETUP:
-1. Install dependency:
-     pip install python-telegram-bot --upgrade
- 
-2. Get a bot token from @BotFather on Telegram:
-     - Open a chat with @BotFather
-     - Send /newbot and follow the prompts
-     - Copy the token it gives you
- 
-3. Set the token as an environment variable (recommended) or paste it below:
+1. Install the only dependency:
+     pip install requests
+
+2. Get a bot token from @BotFather on Telegram (send /newbot, follow prompts).
+
+3. Set the token as an environment variable:
      export TELEGRAM_BOT_TOKEN="123456789:ABCdefGhIJKlmNoPQRstuVwxyZ"
- 
-4. Run the bot:
-     python telegram_bot.py
- 
-5. In Telegram, open a chat with your bot and send:
-     /test1
-     /test2
-     /test3
+
+4. Run:
+     python telegram_bot_raw.py
+
+5. In Telegram, message your bot with /howgayami.
+
+HOW IT WORKS:
+Telegram's Bot API is just plain HTTP/JSON. This script repeatedly calls
+`getUpdates` (long polling) to fetch new messages, checks if the message
+text is the known command, and calls `sendMessage` to reply. No SDK needed.
 """
- 
-import logging
+
 import os
 import random
- 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
- 
-# --- Configuration ---------------------------------------------------------
- 
-# Prefer an environment variable so you never hardcode secrets in the file.
-# If you want to hardcode it for quick testing, replace the default below.
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8535182527:AAFPzqIDQX-FqzazGPQ0rOeYSnn9XbkXsHY")
- 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
- 
- 
-# --- Command handlers --------------------------------------------------------
- 
-async def random_percent_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Shared handler: replies with a random percentage."""
-    n = random.randint(0, 100)
-    await update.message.reply_text(f"It is {n}%")
- 
- 
-async def howcossacksami(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await random_percent_reply(update, context)
- 
- 
-async def test2(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await random_percent_reply(update, context)
- 
- 
-async def test3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await random_percent_reply(update, context)
- 
- 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Hi! Try one of these commands:\n/test1\n/test2\n/test3"
+import time
+
+import requests
+
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "PUT_YOUR_TOKEN_HERE")
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+COMMAND = "/howgayami"
+
+
+def get_updates(offset=None, timeout=30):
+    """Long-poll Telegram for new updates (messages)."""
+    params = {"timeout": timeout}
+    if offset is not None:
+        params["offset"] = offset
+    resp = requests.get(f"{API_URL}/getUpdates", params=params, timeout=timeout + 10)
+    resp.raise_for_status()
+    return resp.json()["result"]
+
+
+def send_message(chat_id, text):
+    """Send a text message to a chat."""
+    resp = requests.post(
+        f"{API_URL}/sendMessage",
+        data={"chat_id": chat_id, "text": text},
+        timeout=10,
     )
- 
- 
-# --- Entry point -------------------------------------------------------------
- 
-def main() -> None:
+    resp.raise_for_status()
+    return resp.json()
+
+
+def handle_update(update):
+    message = update.get("message")
+    if not message or "text" not in message:
+        return
+
+    text = message["text"].strip()
+    chat_id = message["chat"]["id"]
+
+    # Handle "/howgayami" and also "/howgayami@YourBotName" (used in group chats),
+    # case-insensitively.
+    command = text.split("@")[0].split()[0].lower() if text.startswith("/") else None
+
+    if command == COMMAND:
+        n = random.randint(0, 100)
+        send_message(chat_id, f"{n}%")
+    else:
+        send_message(chat_id, "Hi! Try /howgayami")
+
+
+def main():
     if not BOT_TOKEN or BOT_TOKEN == "PUT_YOUR_TOKEN_HERE":
         raise RuntimeError(
-            "No bot token found. Set the TELEGRAM_BOT_TOKEN environment variable "
-            "or edit BOT_TOKEN in this file."
+            "No bot token found. Set TELEGRAM_BOT_TOKEN or edit BOT_TOKEN in this file."
         )
- 
-    application = Application.builder().token(BOT_TOKEN).build()
- 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("howcossacksami", howcossacksami))
- 
-    logger.info("Bot is starting (polling mode)...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
- 
- 
+
+    print("Bot is starting (manual long-polling, no telegram library)...")
+    offset = None
+
+    while True:
+        try:
+            updates = get_updates(offset=offset)
+            for update in updates:
+                handle_update(update)
+                offset = update["update_id"] + 1
+        except requests.exceptions.RequestException as e:
+            print(f"Network error, retrying in 5s: {e}")
+            time.sleep(5)
+
+
 if __name__ == "__main__":
     main()
