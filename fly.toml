@@ -1,0 +1,18 @@
+# Fly.io config for a background-worker Telegram bot (long-polling, no HTTP server).
+# Run `fly launch` first to generate the real app name / region, then this
+# file can replace/merge with what it creates.
+
+app = "your-telegram-bot"   # fly will ask you to set/confirm this
+primary_region = "iad"       # pick the region closest to you
+
+[build]
+
+[processes]
+  app = "python telegram_bot_raw.py"
+
+# No [http_service] or [[services]] block — this app doesn't listen on a port,
+# it just runs the polling loop continuously.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
