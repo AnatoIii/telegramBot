@@ -7,10 +7,8 @@ app = 'telegrambot-njfz7w'
 primary_region = 'iad'
 
 [build]
-  builder = 'paketobuildpacks/builder:base'
 
 [env]
-  PORT = '8080'
 
 [processes]
   app = 'python telegram_bot_raw.py'
