@@ -1,18 +1,28 @@
-# Fly.io config for a background-worker Telegram bot (long-polling, no HTTP server).
-# Run `fly launch` first to generate the real app name / region, then this
-# file can replace/merge with what it creates.
+# fly.toml app configuration file generated for telegrambot-njfz7w on 2026-08-06T23:58:23Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "your-telegram-bot"   # fly will ask you to set/confirm this
-primary_region = "iad"       # pick the region closest to you
+app = 'telegrambot-njfz7w'
+primary_region = 'iad'
 
 [build]
+  builder = 'paketobuildpacks/builder:base'
+
+[env]
+  PORT = '8080'
 
 [processes]
-  app = "python telegram_bot_raw.py"
+  app = 'python telegram_bot_raw.py'
 
-# No [http_service] or [[services]] block — this app doesn't listen on a port,
-# it just runs the polling loop continuously.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'
