@@ -27,6 +27,7 @@ Telegram's Bot API is just plain HTTP/JSON. This script repeatedly calls
 text is the known command, and calls `sendMessage` to reply. No SDK needed.
 """
 
+import json
 import os
 import random
 import time
@@ -37,6 +38,15 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "PUT_YOUR_TOKEN_HERE")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 COMMAND = "/howgayami"
+BUTTON_LABEL = "🎲 How Gay Am I?"
+
+# A reply keyboard: replaces the user's normal keyboard with these buttons.
+# Tapping a button just sends its label text as a regular message.
+MAIN_KEYBOARD = {
+    "keyboard": [[{"text": BUTTON_LABEL}]],
+    "resize_keyboard": True,   # make buttons compact instead of full-size
+    "is_persistent": True,     # keep the keyboard showing after use
+}
 
 
 def get_updates(offset=None, timeout=30):
@@ -49,13 +59,12 @@ def get_updates(offset=None, timeout=30):
     return resp.json()["result"]
 
 
-def send_message(chat_id, text):
-    """Send a text message to a chat."""
-    resp = requests.post(
-        f"{API_URL}/sendMessage",
-        data={"chat_id": chat_id, "text": text},
-        timeout=10,
-    )
+def send_message(chat_id, text, reply_markup=None):
+    """Send a text message to a chat, optionally with a keyboard attached."""
+    data = {"chat_id": chat_id, "text": text}
+    if reply_markup is not None:
+        data["reply_markup"] = json.dumps(reply_markup)
+    resp = requests.post(f"{API_URL}/sendMessage", data=data, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
@@ -72,11 +81,11 @@ def handle_update(update):
     # case-insensitively.
     command = text.split("@")[0].split()[0].lower() if text.startswith("/") else None
 
-    if command == COMMAND:
+    if command == COMMAND or text == BUTTON_LABEL:
         n = random.randint(0, 100)
-        send_message(chat_id, f"{n}%")
-    else:
-        send_message(chat_id, "Hi! Try /howgayami")
+        send_message(chat_id, f"{n}%", reply_markup=MAIN_KEYBOARD)
+    elif command == "/start":
+        send_message(chat_id, "Hi! Tap the button below.", reply_markup=MAIN_KEYBOARD)
 
 
 def main():
